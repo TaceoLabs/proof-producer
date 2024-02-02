@@ -42,7 +42,7 @@
 #include <nil/crypto3/zk/snark/arithmetization/plonk/constraint_system.hpp>
 #include <nil/crypto3/zk/snark/systems/plonk/placeholder/params.hpp>
 #include <nil/crypto3/zk/snark/systems/plonk/placeholder/preprocessor.hpp>
-#include <nil/crypto3/zk/snark/systems/plonk/placeholder/prover.hpp>
+// #include <nil/crypto3/zk/snark/systems/plonk/placeholder/prover.hpp>
 #include <nil/crypto3/zk/snark/systems/plonk/placeholder/profiling.hpp>
 #include <nil/crypto3/zk/snark/systems/plonk/placeholder/proof.hpp>
 #include <nil/crypto3/zk/snark/systems/plonk/placeholder/verifier.hpp>
@@ -214,58 +214,34 @@ namespace nil {
                 table_description.witness_columns + table_description.public_input_columns + ComponentConstantColumns;
             lpc_scheme_type lpc_scheme(fri_params);
 
+            // Reading proof
+            using ProofType = NAMESPACE::zk::snark::placeholder_proof<BlueprintFieldType, placeholder_params>;
+            BOOST_LOG_TRIVIAL(info) << "Reading proof" << std::endl;
+            BOOST_LOG_TRIVIAL(info) << "Proof Type = " << typeid(ProofType).name() << std::endl;
+
+            auto proof = read_proof<Endianness, ProofType>(fri_params, proof_file);
+
+            BOOST_LOG_TRIVIAL(info) << "Proof read" << std::endl;
+
+
             BOOST_LOG_TRIVIAL(info) << "Preprocessing public data..." << std::endl;
             typename NAMESPACE::zk::snark::placeholder_public_preprocessor<
                 BlueprintFieldType, placeholder_params>::preprocessed_data_type public_preprocessed_data =
             NAMESPACE::zk::snark::placeholder_public_preprocessor<BlueprintFieldType, placeholder_params>::process(
                 constraint_system, assignment_table.move_public_table(), table_description, lpc_scheme, permutation_size);
 
-            BOOST_LOG_TRIVIAL(info) << "Preprocessing private data..." << std::endl;
-            typename NAMESPACE::zk::snark::placeholder_private_preprocessor<
-                BlueprintFieldType, placeholder_params>::preprocessed_data_type private_preprocessed_data =
-                NAMESPACE::zk::snark::placeholder_private_preprocessor<BlueprintFieldType, placeholder_params>::process(
-                    constraint_system, assignment_table.move_private_table(), table_description
+            BOOST_LOG_TRIVIAL(info) << "Verifying proof..." << std::endl;
+            bool verification_result =
+                NAMESPACE::zk::snark::placeholder_verifier<BlueprintFieldType, placeholder_params>::process(
+                    public_preprocessed_data, proof, constraint_system, lpc_scheme
                 );
 
-            if (constraint_system.num_gates() == 0){
-                BOOST_LOG_TRIVIAL(info) << "Generating proof (zero gates)..." << std::endl;
-                BOOST_LOG_TRIVIAL(info) << "Proof generated" << std::endl;
-                BOOST_LOG_TRIVIAL(info) << "Writing proof to " << proof_file << "..." << std::endl;
-                std::fstream fs;
-                fs.open(proof_file, std::ios::out);
-                fs.close();
-                BOOST_LOG_TRIVIAL(info) << "Proof written" << std::endl;
-            } else {
-                BOOST_LOG_TRIVIAL(info) << "Generating proof..." << std::endl;
-                using ProofType = NAMESPACE::zk::snark::placeholder_proof<BlueprintFieldType, placeholder_params>;
-                BOOST_LOG_TRIVIAL(info) << "Proof Type = " << typeid(ProofType).name() << std::endl;
-
-                ProofType proof = NAMESPACE::zk::snark::placeholder_prover<BlueprintFieldType, placeholder_params>::process(
-                    public_preprocessed_data, private_preprocessed_data, table_description, constraint_system,
-                    lpc_scheme);
-                BOOST_LOG_TRIVIAL(info) << "Proof generated" << std::endl;
-
-
-                BOOST_LOG_TRIVIAL(info) << "Verifying proof..." << std::endl;
-                bool verification_result =
-                    NAMESPACE::zk::snark::placeholder_verifier<BlueprintFieldType, placeholder_params>::process(
-                        public_preprocessed_data, proof, constraint_system, lpc_scheme
-                    );
-
-                if (!verification_result) {
-                    BOOST_LOG_TRIVIAL(error) << "Something went wrong - proof is not verified";
-                    return false;
-                }
-
-                BOOST_LOG_TRIVIAL(info) << "Proof is verified" << std::endl;
-
-                BOOST_LOG_TRIVIAL(info) << "Writing proof to " << proof_file;
-                auto filled_placeholder_proof =
-                    nil::crypto3::marshalling::types::fill_placeholder_proof<Endianness, ProofType>(proof, fri_params);
-                proof_print<Endianness, ProofType>(proof, fri_params, proof_file);
-                BOOST_LOG_TRIVIAL(info) << "Proof written";
-                return true;
+            if (!verification_result) {
+                BOOST_LOG_TRIVIAL(error) << "Something went wrong - proof is not verified";
+                return false;
             }
+
+            return true;
         }
     }        // namespace proof_verifier
 }    // namespace nil

@@ -28,37 +28,42 @@
 
 namespace nil {
     namespace proof_verifier {
-        template<typename TIter>
-        void print_hex_byteblob(std::ostream &os, TIter iter_begin, TIter iter_end, bool endl) {
-            os << "0x" << std::hex;
-            for (TIter it = iter_begin; it != iter_end; it++) {
-                os << std::setfill('0') << std::setw(2) << std::right << int(*it);
-            }
-            os << std::dec;
-            if (endl) {
-                os << std::endl;
-            }
-        }
 
         template<typename Endianness, typename Proof, typename CommitmentParamsType>
-        void proof_print(const Proof &proof, const CommitmentParamsType &params, boost::filesystem::path output_file) {
-            using namespace nil::crypto3::marshalling;
-
+        Proof read_proof(const CommitmentParamsType &params, boost::filesystem::path input_file) {
             using TTypeBase = nil::marshalling::field_type<Endianness>;
 
-            using proof_marshalling_type = nil::crypto3::zk::snark::placeholder_proof<TTypeBase, Proof>;
+            using proof_marshalling_type = nil::crypto3::marshalling::types::placeholder_proof<TTypeBase, Proof>;
 
-            auto filled_placeholder_proof =
-                crypto3::marshalling::types::fill_placeholder_proof<Endianness, Proof>(proof, params);
+            std::ifstream in;
+            in.open(input_file.c_str(), std::ios_base::binary | std::ios_base::in);
+            if (!in.is_open())
+            {
+                std::cerr << "Cannot open input file " << input_file.string()<< std::endl;
+                exit(-1);
+            }
 
-            std::vector<std::uint8_t> cv;
-            cv.resize(filled_placeholder_proof.length(), 0x00);
-            auto write_iter = cv.begin();
-            nil::marshalling::status_type status = filled_placeholder_proof.write(write_iter, cv.size());
-            std::ofstream out;
-            out.open(output_file.c_str());
-            print_hex_byteblob(out, cv.cbegin(), cv.cend(), false);
+            in.seekg(0, std::ios_base::end);
+            auto size = in.tellg();
+            in.seekg(0, std::ios_base::beg);
+
+            std::vector<std::uint8_t> cv(size);
+            if (!in.read(reinterpret_cast<char*>(cv.data()), size))
+            {
+                std::cerr << "Cannot parse input file " << input_file.string()<< std::endl;
+                exit(-1);
+            }
+            in.close();
+
+            proof_marshalling_type val_read;
+            auto read_iter = cv.begin();
+            auto status = val_read.read(read_iter, cv.size());
+            Proof constructed_val_read = nil::crypto3::marshalling::types::make_placeholder_proof<Endianness, Proof>(val_read);
+
+            return constructed_val_read;
+
         }
+
     }    // namespace proof_verifier
 }    // namespace nil
 

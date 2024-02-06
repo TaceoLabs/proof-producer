@@ -14,15 +14,19 @@
       in
       with pkgs;
       {
-        devShells.default = mkShell.override { stdenv = clangStdenv; }
+        devShells.default = mkShell.override { stdenv = clang14Stdenv; }
           {
             buildInputs = [
+              pkgs.clang
               pkgs.clang-tools
               pkgs.pkg-config
               pkgs.cmake
               pkgs.ninja
               pkgs.git
               (pkgs.gnutls.override { cxxBindings = true; })
+              pkgs.libtasn1
+              pkgs.libidn2
+              pkgs.p11-kit
               pkgs.openssl
               pkgs.yaml-cpp
               pkgs.pkgs.zlib
@@ -38,7 +42,8 @@
               pkgs.c-ares
               pkgs.lz4
               pkgs.numactl
-              (pkgs.boost180.override { enableShared = false; })
+              (pkgs.boost183.override { enableShared = false; })
+              pkgs.fmt
             ];
           };
       }
